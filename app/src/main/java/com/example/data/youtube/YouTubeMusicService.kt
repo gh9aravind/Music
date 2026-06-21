@@ -132,6 +132,10 @@ object YouTubeMusicService {
      * callers should catch and surface a friendly error.
      */
     suspend fun resolveAudioStreamUrl(videoId: String): String = withContext(Dispatchers.IO) {
+        streamCache[videoId]?.let { (cachedUrl, expiry) ->
+            if (System.currentTimeMillis() < expiry) return@withContext cachedUrl
+        }
+
         ensureInitialized()
         val url = "https://www.youtube.com/watch?v=$videoId"
         val streamInfo = StreamInfo.getInfo(ServiceList.YouTube, url)
@@ -141,6 +145,18 @@ object YouTubeMusicService {
             .maxByOrNull { it.averageBitrate }
             ?: throw IllegalStateException("No playable audio stream found for $videoId")
 
-        bestAudio.content!!
+        val resolvedUrl = bestAudio.content!!
+        streamCache[videoId] = resolvedUrl to (System.currentTimeMillis() + CACHE_TTL_MS)
+        resolvedUrl
     }
-}
+
+    /** Resolves stream URLs for several videos ahead of time, ignoring individual failures. */
+    suspend fun prefetch(videoIds: List<String>) = withContext(Dispatchers.IO) {
+        videoIds.forEach { id ->
+            try {
+                resolveAudioStreamUrl(id)
+            } catch (e: Exception) {
+                // Ignore - playback will just retry when actually requested
+            }
+        }
+    }
