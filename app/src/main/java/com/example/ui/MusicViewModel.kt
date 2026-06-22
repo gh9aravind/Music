@@ -259,20 +259,14 @@ class MusicViewModel(
         }
     }
     fun togglePlayPause() {
-        val player = mediaPlayer ?: return
+        val player = controller ?: return
         try {
             if (player.isPlaying) {
                 player.pause()
-                _isPlaying.value = false
-                stopProgressTracking()
             } else {
-                // If preparation was fully configured
                 if (_currentTrack.value != null) {
-                    player.start()
-                    _isPlaying.value = true
-                    startProgressTracking()
+                    player.play()
                 } else {
-                    // If nothing playing, grab first track if available
                     val first = allTracks.value.firstOrNull()
                     if (first != null) {
                         selectAndPlayTrack(first, allTracks.value)
@@ -283,7 +277,6 @@ class MusicViewModel(
             Log.e(TAG, "Error toggling play/pause state", e)
         }
     }
-
     fun seekTo(positionMs: Int) {
         try {
             mediaPlayer?.seekTo(positionMs)
