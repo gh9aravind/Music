@@ -345,9 +345,9 @@ class MusicViewModel(
         progressTrackingJob = viewModelScope.launch(Dispatchers.Main) {
             while (true) {
                 try {
-                    mediaPlayer?.let { player ->
+                    controller?.let { player ->
                         if (player.isPlaying) {
-                            _playbackPosition.value = player.currentPosition
+                            _playbackPosition.value = player.currentPosition.toInt()
                         }
                     }
                 } catch (e: Exception) {
