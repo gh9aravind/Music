@@ -105,6 +105,8 @@ dependencies {
   implementation(libs.retrofit)
   implementation(libs.coil.compose)
   implementation(libs.newpipe.extractor)
+  implementation("androidx.media3:media3-exoplayer:1.4.1")
+  implementation("androidx.media3:media3-session:1.4.1")
   coreLibraryDesugaring(libs.desugar.jdk.libs)
   testImplementation(libs.androidx.compose.ui.test.junit4)
   testImplementation(libs.androidx.core)
