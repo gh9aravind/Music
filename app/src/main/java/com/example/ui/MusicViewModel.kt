@@ -165,23 +165,43 @@ class MusicViewModel(
         viewModelScope.launch {
             repository.preloadDefaultTracksIfEmpty()
         }
-        setupMediaPlayer()
+        initController()
     }
 
-    private fun setupMediaPlayer() {
-        if (mediaPlayer == null) {
-            mediaPlayer = MediaPlayer().apply {
-                setOnCompletionListener {
-                    onSongCompleted()
-                }
-                setOnErrorListener { mp, what, extra ->
-                    Log.e(TAG, "MediaPlayer error: what=$what, extra=$extra")
-                    _isPlaying.value = false
-                    stopProgressTracking()
-                    true
-                }
+    private fun initController() {
+        val sessionToken = SessionToken(appContext, ComponentName(appContext, PlaybackService::class.java))
+        val future = MediaController.Builder(appContext, sessionToken).buildAsync()
+        controllerFuture = future
+        future.addListener({
+            try {
+                val mc = future.get()
+                controller = mc
+                mc.addListener(object : Player.Listener {
+                    override fun onIsPlayingChanged(isPlayingNow: Boolean) {
+                        _isPlaying.value = isPlayingNow
+                        if (isPlayingNow) startProgressTracking() else stopProgressTracking()
+                    }
+
+                    override fun onPlaybackStateChanged(playbackState: Int) {
+                        when (playbackState) {
+                            Player.STATE_READY -> {
+                                _trackDuration.value = mc.duration.toInt().coerceAtLeast(0)
+                            }
+                            Player.STATE_ENDED -> onSongCompleted()
+                            else -> {}
+                        }
+                    }
+
+                    override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
+                        Log.e(TAG, "Player error: ${error.message}", error)
+                        _isPlaying.value = false
+                        stopProgressTracking()
+                    }
+                })
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed connecting to PlaybackService", e)
             }
-        }
+        }, MoreExecutors.directExecutor())
     }
 
     fun setTab(tab: String) {
