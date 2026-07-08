@@ -180,26 +180,6 @@ fun SoundSpotBottomBar(viewModel: MusicViewModel) {
         )
 
         NavigationBarItem(
-            selected = activeTab == "recommend",
-            onClick = { viewModel.setTab("recommend") },
-            icon = {
-                Icon(
-                    imageVector = if (activeTab == "recommend") Icons.Filled.AutoAwesome else Icons.Outlined.AutoAwesome,
-                    contentDescription = "Consult AI DJ"
-                )
-            },
-            label = { Text("AI DJ", fontWeight = FontWeight.Bold, fontSize = 11.sp) },
-            colors = NavigationBarItemDefaults.colors(
-                selectedIconColor = SpotifyGreen,
-                selectedTextColor = SpotifyGreen,
-                unselectedIconColor = Color.LightGray,
-                unselectedTextColor = Color.LightGray,
-                indicatorColor = Color(0x2210B981)
-            ),
-            modifier = Modifier.testTag("nav_ai_dj_button")
-        )
-
-        NavigationBarItem(
             selected = activeTab == "library",
             onClick = { viewModel.setTab("library") },
             icon = {
