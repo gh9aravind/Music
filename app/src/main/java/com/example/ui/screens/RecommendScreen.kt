@@ -37,10 +37,10 @@ fun RecommendScreen(
     val context = LocalContext.current
     val vibeText by viewModel.currentVibeText.collectAsState()
     val recommendations by viewModel.aiRecommendations.collectAsState()
+    val recommendedTracks by viewModel.recommendedTracks.collectAsState()
     val isLoading by viewModel.isLoadingRecommendations.collectAsState()
     val error by viewModel.recommendationError.collectAsState()
 
-    val allTracks by viewModel.allTracks.collectAsState()
     val activeTrack by viewModel.currentTrack.collectAsState()
     val isPlaying by viewModel.isPlaying.collectAsState()
 
@@ -59,7 +59,6 @@ fun RecommendScreen(
         verticalArrangement = Arrangement.spacedBy(16.dp),
         contentPadding = PaddingValues(bottom = 120.dp)
     ) {
-        // --- 1. Screen Headline ---
         item {
             Column(modifier = Modifier.padding(top = 28.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -77,7 +76,7 @@ fun RecommendScreen(
                     )
                 }
                 Text(
-                    text = "Describe your mood or setting to build customized Gemini-curated playlists in seconds.",
+                    text = "Describe your mood or setting - we'll find and play real tracks from YouTube to match.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = Color.Gray,
                     modifier = Modifier.padding(top = 4.dp)
@@ -85,7 +84,6 @@ fun RecommendScreen(
             }
         }
 
-        // --- 2. Mood Pill Selectors ---
         item {
             Column {
                 Text(
@@ -103,12 +101,12 @@ fun RecommendScreen(
                         Box(
                             modifier = Modifier
                                 .background(
-                                    color = if (vibeText == pillText) Color(0x3310B981) else Color(0x0CFFFFFF), // translucent emerald tint or white/5 glass
+                                    color = if (vibeText == pillText) Color(0x3310B981) else Color(0x0CFFFFFF),
                                     shape = RoundedCornerShape(16.dp)
                                 )
                                 .border(
                                     width = 1.dp,
-                                    color = if (vibeText == pillText) SpotifyGreen else Color(0x1BFFFFFF), // emerald border or subtle white border
+                                    color = if (vibeText == pillText) SpotifyGreen else Color(0x1BFFFFFF),
                                     shape = RoundedCornerShape(16.dp)
                                 )
                                 .clickable { viewModel.setVibeText(pillText) }
@@ -126,7 +124,6 @@ fun RecommendScreen(
             }
         }
 
-        // --- 3. Prompt Input Area ---
         item {
             Column {
                 OutlinedTextField(
@@ -146,10 +143,10 @@ fun RecommendScreen(
                     maxLines = 3,
                     shape = RoundedCornerShape(12.dp),
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedContainerColor = Color(0x19FFFFFF), // translucent white/10 glass
-                        unfocusedContainerColor = Color(0x0CFFFFFF), // translucent white/5 glass
+                        focusedContainerColor = Color(0x19FFFFFF),
+                        unfocusedContainerColor = Color(0x0CFFFFFF),
                         focusedBorderColor = SpotifyGreen,
-                        unfocusedBorderColor = Color(0x12FFFFFF), // thin white glass edge
+                        unfocusedBorderColor = Color(0x12FFFFFF),
                         focusedTextColor = Color.White,
                         unfocusedTextColor = Color.White
                     )
@@ -185,7 +182,6 @@ fun RecommendScreen(
             }
         }
 
-        // --- 4. Render Error / API Guidance Banner ---
         if (error != null) {
             item {
                 Card(
@@ -216,7 +212,6 @@ fun RecommendScreen(
             }
         }
 
-        // --- 5. Render Playlist recommendations ---
         if (recommendations.isNotEmpty()) {
             item {
                 Column(modifier = Modifier.padding(top = 10.dp)) {
@@ -234,19 +229,21 @@ fun RecommendScreen(
                 }
             }
 
-            items(recommendations) { song ->
-                val matchingTrackInDb = allTracks.find { it.title == song.title }
-                val isCurrent = activeTrack?.title == song.title
-                
+            items(recommendations.size) { index ->
+                val song = recommendations[index]
+                val matchedTrack = recommendedTracks.getOrNull(index)
+                val isCurrent = matchedTrack != null && activeTrack?.id == matchedTrack.id
+                val playableTracks = recommendedTracks.filterNotNull()
+
                 Card(
                     shape = RoundedCornerShape(12.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color(0x0CFFFFFF)), // translucent white/5 glass
-                    border = BorderStroke(1.dp, Color(0x12FFFFFF)), // border border-white/5 thin glass stroke
+                    colors = CardDefaults.cardColors(containerColor = Color(0x0CFFFFFF)),
+                    border = BorderStroke(1.dp, Color(0x12FFFFFF)),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clickable {
-                            if (matchingTrackInDb != null) {
-                                viewModel.selectAndPlayTrack(matchingTrackInDb, allTracks)
+                        .clickable(enabled = matchedTrack != null) {
+                            matchedTrack?.let {
+                                viewModel.selectAndPlayTrack(it, playableTracks)
                             }
                         }
                 ) {
@@ -269,26 +266,41 @@ fun RecommendScreen(
                                     color = Color.Gray
                                 )
                             }
-                            
-                            // Streaming Play Indicator
-                            if (matchingTrackInDb != null) {
-                                IconButton(onClick = {
-                                    viewModel.selectAndPlayTrack(matchingTrackInDb, allTracks)
-                                }) {
-                                    Icon(
-                                        imageVector = if (isCurrent && isPlaying) Icons.Default.VolumeUp else Icons.Default.PlayArrow,
-                                        contentDescription = "Play custom track",
-                                        tint = SpotifyGreen
+
+                            when {
+                                matchedTrack != null -> {
+                                    IconButton(onClick = {
+                                        viewModel.selectAndPlayTrack(matchedTrack, playableTracks)
+                                    }) {
+                                        Icon(
+                                            imageVector = if (isCurrent && isPlaying) Icons.Default.VolumeUp else Icons.Default.PlayArrow,
+                                            contentDescription = "Play on YouTube",
+                                            tint = SpotifyGreen
+                                        )
+                                    }
+                                }
+                                isLoading -> {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(18.dp),
+                                        color = SpotifyGreen,
+                                        strokeWidth = 2.dp
+                                    )
+                                }
+                                else -> {
+                                    Text(
+                                        text = "Not found",
+                                        fontSize = 10.sp,
+                                        color = Color.Gray
                                     )
                                 }
                             }
                         }
-                        
+
                         HorizontalDivider(
-                            color = Color(0x12FFFFFF), // Translucent partition line
+                            color = Color(0x12FFFFFF),
                             modifier = Modifier.padding(vertical = 8.dp)
                         )
-                        
+
                         Text(
                             text = "\"${song.vibeDescription}\"",
                             fontStyle = FontStyle.Italic,
