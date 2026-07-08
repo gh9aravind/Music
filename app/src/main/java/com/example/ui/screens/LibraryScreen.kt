@@ -3,18 +3,18 @@ package com.example.ui.screens
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.foundation.clickable
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Block
-import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.OfflinePin
-import androidx.compose.material.icons.filled.SignalWifiOff
-import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.PlaylistPlay
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -25,11 +25,10 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.data.model.PlaylistWithCount
+import com.example.data.model.Track
 import com.example.ui.MusicViewModel
 import com.example.ui.theme.SpotifyGreen
-import com.example.ui.components.HtmlWebViewPlayer
-import com.example.ui.components.HtmlWebPlayerGenerator
-
 
 @Composable
 fun LibraryScreen(
@@ -39,394 +38,70 @@ fun LibraryScreen(
     val context = LocalContext.current
     val favoriteTracks by viewModel.favoriteTracks.collectAsState()
     val downloadedTracks by viewModel.downloadedTracks.collectAsState()
-    val allTracks by viewModel.allTracks.collectAsState()
     val activeTrack by viewModel.currentTrack.collectAsState()
     val isPlaying by viewModel.isPlaying.collectAsState()
 
-    // --- Token & Subscription States ---
-    val activeToken by viewModel.activeApiToken.collectAsState()
-    val activeTier by viewModel.activeSubscriptionTier.collectAsState()
-    var showTokenEditor by remember { mutableStateOf(false) }
-    var inputTokenText by remember { mutableStateOf(activeToken ?: "") }
+    val allPlaylists by viewModel.allPlaylists.collectAsState()
+    val selectedPlaylistId by viewModel.selectedPlaylistId.collectAsState()
+    val selectedPlaylistTracks by viewModel.selectedPlaylistTracks.collectAsState()
 
-    LaunchedEffect(activeToken) {
-        inputTokenText = activeToken ?: ""
-    }
+    var selectedSubTab by remember { mutableStateOf(0) } // 0: Favorites, 1: Downloads, 2: Playlists
+    var showCreateDialog by remember { mutableStateOf(false) }
+    var renamingPlaylist by remember { mutableStateOf<PlaylistWithCount?>(null) }
+    var addToPlaylistTrack by remember { mutableStateOf<Track?>(null) }
 
-    var selectedSubTab by remember { mutableStateOf(0) } // 0: Favorites, 1: Downloads
-    var offlinePlaybackOnlyMode by remember { mutableStateOf(false) }
-
-    val activeDisplayList = remember(selectedSubTab, offlinePlaybackOnlyMode, favoriteTracks, downloadedTracks) {
-        if (offlinePlaybackOnlyMode) {
-            downloadedTracks
-        } else {
-            if (selectedSubTab == 0) favoriteTracks else downloadedTracks
-        }
-    }
+    val activeDisplayList = if (selectedSubTab == 0) favoriteTracks else downloadedTracks
 
     Column(
         modifier = modifier
             .fillMaxSize()
             .padding(horizontal = 16.dp)
     ) {
-        // --- 1. Library Title ---
-        Text(
-            text = "Your Library",
-            style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold),
-            color = Color.White,
-            modifier = Modifier.padding(top = 28.dp, bottom = 12.dp)
-        )
-
-        // --- 1B. Auth0 / Firebase Token & Unlimited Tier Manager ---
-        Card(
-            shape = RoundedCornerShape(12.dp),
-            colors = CardDefaults.cardColors(
-                containerColor = Color(0x0CFFFFFF) // translucent white/5 glass
-            ),
-            border = BorderStroke(
-                width = 1.dp,
-                color = Color(0x1BFFFFFF) // subtle white glass border
-            ),
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = 12.dp)
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(14.dp)
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Row(
-                        modifier = Modifier.weight(1f),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        val isUnlimited = activeTier.contains("Unlimited", ignoreCase = true)
-                        Icon(
-                            imageVector = if (isUnlimited) Icons.Default.Star else Icons.Default.Lock,
-                            contentDescription = "Token indicator",
-                            tint = if (isUnlimited) Color(0xFFFBBF24) else SpotifyGreen, // Amber or green tint
-                            modifier = Modifier.size(24.dp)
-                        )
-                        Column {
-                            Text(
-                                text = "Auth0 / Firebase Token Manager",
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 13.sp,
-                                color = Color.White
-                            )
-                            Text(
-                                text = "Tier: $activeTier",
-                                fontSize = 11.sp,
-                                color = if (isUnlimited) Color(0xFFFBBF24) else Color.LightGray,
-                                fontWeight = if (isUnlimited) FontWeight.Bold else FontWeight.Normal
-                            )
-                        }
-                    }
-                    Button(
-                        onClick = { showTokenEditor = !showTokenEditor },
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = Color(0x16FFFFFF),
-                            contentColor = Color.White
-                        ),
-                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
-                        shape = RoundedCornerShape(8.dp),
-                        modifier = Modifier.height(28.dp)
-                    ) {
-                        Text(
-                            text = if (showTokenEditor) "Hide" else "Manage",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                }
-
-                if (showTokenEditor) {
-                    Spacer(modifier = Modifier.height(12.dp))
-                    
-                    Text(
-                        text = "JWT Session Token",
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.LightGray,
-                        modifier = Modifier.padding(bottom = 6.dp)
-                    )
-
-                    OutlinedTextField(
-                        value = inputTokenText,
-                        onValueChange = { inputTokenText = it },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(bottom = 10.dp)
-                            .testTag("api_token_input"),
-                        placeholder = { Text("Enter Auth0 or Firebase Identity JWT", fontSize = 12.sp, color = Color.Gray) },
-                        singleLine = true,
-                        shape = RoundedCornerShape(8.dp),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedContainerColor = Color(0x11FFFFFF),
-                            unfocusedContainerColor = Color(0x07FFFFFF),
-                            focusedBorderColor = SpotifyGreen,
-                            unfocusedBorderColor = Color(0x15FFFFFF),
-                            focusedTextColor = Color.White,
-                            unfocusedTextColor = Color.White
-                        ),
-                        textStyle = MaterialTheme.typography.bodyMedium.copy(fontSize = 12.sp)
-                    )
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        // Quick Action: Set Unlimited Token
-                        Button(
-                            onClick = {
-                                viewModel.setTokenToUnlimited()
-                            },
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = SpotifyGreen,
-                                contentColor = Color.Black
-                            ),
-                            shape = RoundedCornerShape(8.dp),
-                            modifier = Modifier
-                                .weight(1.1f)
-                                .height(36.dp)
-                                .testTag("set_unlimited_token_button")
-                        ) {
-                            Text("Set Unlimited", fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                        }
-
-                        // Apply manually edited token
-                        Button(
-                            onClick = {
-                                viewModel.updateApiToken(inputTokenText.trim())
-                            },
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = Color(0x22FFFFFF),
-                                contentColor = Color.White
-                            ),
-                            shape = RoundedCornerShape(8.dp),
-                            modifier = Modifier
-                                .weight(0.9f)
-                                .height(36.dp)
-                                .border(BorderStroke(1.dp, Color(0x33FFFFFF)), RoundedCornerShape(8.dp))
-                        ) {
-                            Text("Apply", fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                        }
-
-                        // Clear Token
-                        Button(
-                            onClick = {
-                                viewModel.updateApiToken(null)
-                                inputTokenText = ""
-                            },
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = Color.Transparent,
-                                contentColor = Color.Red
-                            ),
-                            shape = RoundedCornerShape(8.dp),
-                            modifier = Modifier
-                                .weight(0.8f)
-                                .height(36.dp)
-                                .border(BorderStroke(1.dp, Color(0x12FF0000)), RoundedCornerShape(8.dp))
-                        ) {
-                            Text("Clear", fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                        }
-                    }
-                    
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = "Setting 'Unlimited' injects bypass scopes to bypass network API limits securely.",
-                        fontSize = 9.sp,
-                        color = Color.Gray
-                    )
-                }
-            }
-        }
-
-        // --- 2. Master Offline Simulation Toggle Banner ---
-        Card(
-            shape = RoundedCornerShape(12.dp),
-            colors = CardDefaults.cardColors(
-                containerColor = if (offlinePlaybackOnlyMode) Color(0x2210B981) else Color(0x0DFFFFFF) // Emerald tinted or translucent white/5 glass
-            ),
-            border = BorderStroke(
-                width = 1.dp,
-                color = if (offlinePlaybackOnlyMode) SpotifyGreen.copy(alpha = 0.5f) else Color(0x12FFFFFF) // thin glass borders
-            ),
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = 16.dp)
-        ) {
+        // --- 1. Library Title / Playlist Detail Header ---
+        if (selectedPlaylistId != null) {
+            val playlist = allPlaylists.find { it.id == selectedPlaylistId }
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(14.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
+                modifier = Modifier.padding(top = 28.dp, bottom = 12.dp)
             ) {
-                Row(
-                    modifier = Modifier.weight(1f),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    Icon(
-                        imageVector = if (offlinePlaybackOnlyMode) Icons.Default.SignalWifiOff else Icons.Default.OfflinePin,
-                        contentDescription = "Offline indicator",
-                        tint = if (offlinePlaybackOnlyMode) SpotifyGreen else Color.LightGray,
-                        modifier = Modifier.size(24.dp)
-                    )
-                    Column {
-                        Text(
-                            text = if (offlinePlaybackOnlyMode) "Simulating Offline Mode" else "Tested Offline Player",
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 13.sp,
-                            color = Color.White
-                        )
-                        Text(
-                            text = if (offlinePlaybackOnlyMode) "Hiding all non-downloaded streams." else "Simulate airplane mode to test downloaded tracks.",
-                            fontSize = 11.sp,
-                            color = Color.Gray
-                        )
+                IconButton(onClick = { viewModel.closePlaylist() }) {
+                    Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = Color.White)
+                }
+                Text(
+                    text = playlist?.name ?: "Playlist",
+                    style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold),
+                    color = Color.White,
+                    modifier = Modifier.weight(1f)
+                )
+                if (playlist != null) {
+                    IconButton(onClick = { renamingPlaylist = playlist }) {
+                        Icon(Icons.Default.Edit, contentDescription = "Rename playlist", tint = Color.LightGray)
+                    }
+                    IconButton(onClick = { viewModel.deletePlaylist(playlist.id) }) {
+                        Icon(Icons.Default.Delete, contentDescription = "Delete playlist", tint = Color(0xFFE57373))
                     }
                 }
-                Switch(
-                    checked = offlinePlaybackOnlyMode,
-                    onCheckedChange = { offlinePlaybackOnlyMode = it },
-                    colors = SwitchDefaults.colors(
-                        checkedThumbColor = Color.Black,
-                        checkedTrackColor = SpotifyGreen,
-                        uncheckedThumbColor = Color.White,
-                        uncheckedTrackColor = Color.DarkGray
-                    ),
-                    modifier = Modifier.testTag("offline_mode_toggle")
-                )
             }
-        }
 
-        // --- 3. Tab Selectors (if not overridden by offline mode) ---
-        if (!offlinePlaybackOnlyMode) {
-            TabRow(
-                selectedTabIndex = selectedSubTab,
-                containerColor = Color.Transparent,
-                contentColor = SpotifyGreen,
-                divider = {},
-                modifier = Modifier.padding(bottom = 16.dp)
-            ) {
-                Tab(
-                    selected = selectedSubTab == 0,
-                    onClick = { selectedSubTab = 0 },
-                    text = {
-                        Text(
-                            "Liked Songs (${favoriteTracks.size})",
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 12.sp
-                        )
-                    },
-                    selectedContentColor = SpotifyGreen,
-                    unselectedContentColor = Color.Gray,
-                    modifier = Modifier.testTag("tab_favorites")
+            if (selectedPlaylistTracks.isEmpty()) {
+                EmptyState(
+                    title = "This playlist is empty",
+                    subtitle = "Add songs to it using the + icon on any track."
                 )
-                Tab(
-                    selected = selectedSubTab == 1,
-                    onClick = { selectedSubTab = 1 },
-                    text = {
-                        Text(
-                            "Downloads (${downloadedTracks.size})",
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 12.sp
-                        )
-                    },
-                    selectedContentColor = SpotifyGreen,
-                    unselectedContentColor = Color.Gray,
-                    modifier = Modifier.testTag("tab_downloads")
-                )
-                Tab(
-                    selected = selectedSubTab == 2,
-                    onClick = { selectedSubTab = 2 },
-                    text = {
-                        Text(
-                            "HTML5 Web Player",
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 12.sp
-                        )
-                    },
-                    selectedContentColor = SpotifyGreen,
-                    unselectedContentColor = Color.Gray,
-                    modifier = Modifier.testTag("tab_html_player")
-                )
-            }
-        } else {
-            Text(
-                text = "Downloaded Cache Offline (${activeDisplayList.size})",
-                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                color = SpotifyGreen,
-                modifier = Modifier.padding(bottom = 16.dp, top = 4.dp)
-            )
-        }
-
-        // --- 4. Render Tab Content or HTML5 WebView Player ---
-        if (selectedSubTab == 2 && !offlinePlaybackOnlyMode) {
-            val htmlString = remember(favoriteTracks, activeTier) {
-                HtmlWebPlayerGenerator.generatePlayerHtml(favoriteTracks, activeTier)
-            }
-            HtmlWebViewPlayer(
-                viewModel = viewModel,
-                htmlContent = htmlString,
-                modifier = Modifier.weight(1f)
-            )
-        } else {
-            if (activeDisplayList.isEmpty()) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Icon(
-                            imageVector = Icons.Default.Block,
-                            contentDescription = "Empty state icon",
-                            tint = Color.DarkGray,
-                            modifier = Modifier.size(56.dp)
-                        )
-                        Spacer(modifier = Modifier.height(12.dp))
-                        Text(
-                            text = if (offlinePlaybackOnlyMode) "No tracks cached yet!" else if (selectedSubTab == 0) "Your liked songs list is empty!" else "No downloaded songs!",
-                            fontWeight = FontWeight.Bold,
-                            color = Color.White,
-                            fontSize = 15.sp
-                        )
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = if (offlinePlaybackOnlyMode) "Toggle offline mode off and tap 'Download' on any track." else "Enjoy and save tracks from your home playlists.",
-                            color = Color.Gray,
-                            fontSize = 12.sp
-                        )
-                    }
-                }
             } else {
                 LazyColumn(
                     modifier = Modifier.weight(1f),
                     verticalArrangement = Arrangement.spacedBy(4.dp),
                     contentPadding = PaddingValues(bottom = 120.dp)
                 ) {
-                    items(activeDisplayList) { track ->
+                    items(selectedPlaylistTracks) { track ->
                         val isCurrent = activeTrack?.id == track.id
                         TrackListItem(
                             track = track,
                             isCurrent = isCurrent,
                             isPlaying = isCurrent && isPlaying,
-                            onClick = {
-                                viewModel.selectAndPlayTrack(track, activeDisplayList)
-                            },
-                            onFavoriteToggle = {
-                                viewModel.toggleFavorite(track)
-                            },
+                            onClick = { viewModel.selectAndPlayTrack(track, selectedPlaylistTracks) },
+                            onFavoriteToggle = { viewModel.toggleFavorite(track) },
                             onDownload = {
                                 if (track.isDownloaded) {
                                     viewModel.removeTrackDownload(context, track)
@@ -438,6 +113,296 @@ fun LibraryScreen(
                     }
                 }
             }
+        } else {
+            Text(
+                text = "Your Library",
+                style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold),
+                color = Color.White,
+                modifier = Modifier.padding(top = 28.dp, bottom = 12.dp)
+            )
+
+            // --- Tab Selectors ---
+            TabRow(
+                selectedTabIndex = selectedSubTab,
+                containerColor = Color.Transparent,
+                contentColor = SpotifyGreen,
+                divider = {},
+                modifier = Modifier.padding(bottom = 16.dp)
+            ) {
+                Tab(
+                    selected = selectedSubTab == 0,
+                    onClick = { selectedSubTab = 0 },
+                    text = { Text("Liked Songs (${favoriteTracks.size})", fontWeight = FontWeight.Bold, fontSize = 12.sp) },
+                    selectedContentColor = SpotifyGreen,
+                    unselectedContentColor = Color.Gray,
+                    modifier = Modifier.testTag("tab_favorites")
+                )
+                Tab(
+                    selected = selectedSubTab == 1,
+                    onClick = { selectedSubTab = 1 },
+                    text = { Text("Downloads (${downloadedTracks.size})", fontWeight = FontWeight.Bold, fontSize = 12.sp) },
+                    selectedContentColor = SpotifyGreen,
+                    unselectedContentColor = Color.Gray,
+                    modifier = Modifier.testTag("tab_downloads")
+                )
+                Tab(
+                    selected = selectedSubTab == 2,
+                    onClick = { selectedSubTab = 2 },
+                    text = { Text("Playlists (${allPlaylists.size})", fontWeight = FontWeight.Bold, fontSize = 12.sp) },
+                    selectedContentColor = SpotifyGreen,
+                    unselectedContentColor = Color.Gray,
+                    modifier = Modifier.testTag("tab_playlists")
+                )
+            }
+
+            // --- Tab Content ---
+            if (selectedSubTab == 2) {
+                Button(
+                    onClick = { showCreateDialog = true },
+                    colors = ButtonDefaults.buttonColors(containerColor = SpotifyGreen, contentColor = Color.Black),
+                    shape = RoundedCornerShape(24.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 16.dp)
+                        .testTag("create_playlist_button")
+                ) {
+                    Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("New Playlist", fontWeight = FontWeight.Bold)
+                }
+
+                if (allPlaylists.isEmpty()) {
+                    EmptyState(
+                        title = "No playlists yet!",
+                        subtitle = "Create one and start adding your favorite tracks."
+                    )
+                } else {
+                    LazyColumn(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        contentPadding = PaddingValues(bottom = 120.dp)
+                    ) {
+                        items(allPlaylists) { playlist ->
+                            PlaylistRow(
+                                playlist = playlist,
+                                onClick = { viewModel.openPlaylist(playlist.id) },
+                                onRename = { renamingPlaylist = playlist },
+                                onDelete = { viewModel.deletePlaylist(playlist.id) }
+                            )
+                        }
+                    }
+                }
+            } else {
+                if (activeDisplayList.isEmpty()) {
+                    EmptyState(
+                        title = if (selectedSubTab == 0) "Your liked songs list is empty!" else "No downloaded songs!",
+                        subtitle = "Enjoy and save tracks from Home or Search."
+                    )
+                } else {
+                    LazyColumn(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                        contentPadding = PaddingValues(bottom = 120.dp)
+                    ) {
+                        items(activeDisplayList) { track ->
+                            val isCurrent = activeTrack?.id == track.id
+                            TrackListItemWithPlaylistAction(
+                                track = track,
+                                isCurrent = isCurrent,
+                                isPlaying = isCurrent && isPlaying,
+                                onClick = { viewModel.selectAndPlayTrack(track, activeDisplayList) },
+                                onFavoriteToggle = { viewModel.toggleFavorite(track) },
+                                onDownload = {
+                                    if (track.isDownloaded) {
+                                        viewModel.removeTrackDownload(context, track)
+                                    } else {
+                                        viewModel.startTrackDownload(context, track)
+                                    }
+                                },
+                                onAddToPlaylist = { addToPlaylistTrack = track }
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // --- Create Playlist Dialog ---
+    if (showCreateDialog) {
+        var nameText by remember { mutableStateOf("") }
+        AlertDialog(
+            onDismissRequest = { showCreateDialog = false },
+            title = { Text("New Playlist") },
+            text = {
+                OutlinedTextField(
+                    value = nameText,
+                    onValueChange = { nameText = it },
+                    placeholder = { Text("Playlist name") },
+                    singleLine = true,
+                    modifier = Modifier.testTag("new_playlist_name_input")
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.createPlaylist(nameText)
+                    showCreateDialog = false
+                }) { Text("Create") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showCreateDialog = false }) { Text("Cancel") }
+            }
+        )
+    }
+
+    // --- Rename Playlist Dialog ---
+    renamingPlaylist?.let { playlist ->
+        var nameText by remember(playlist.id) { mutableStateOf(playlist.name) }
+        AlertDialog(
+            onDismissRequest = { renamingPlaylist = null },
+            title = { Text("Rename Playlist") },
+            text = {
+                OutlinedTextField(
+                    value = nameText,
+                    onValueChange = { nameText = it },
+                    singleLine = true
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.renamePlaylist(playlist.id, nameText)
+                    renamingPlaylist = null
+                }) { Text("Save") }
+            },
+            dismissButton = {
+                TextButton(onClick = { renamingPlaylist = null }) { Text("Cancel") }
+            }
+        )
+    }
+
+    // --- Add to Playlist Dialog ---
+    addToPlaylistTrack?.let { track ->
+        AlertDialog(
+            onDismissRequest = { addToPlaylistTrack = null },
+            title = { Text("Add to Playlist") },
+            text = {
+                if (allPlaylists.isEmpty()) {
+                    Text("No playlists yet. Create one first from the Playlists tab.", color = Color.Gray)
+                } else {
+                    Column {
+                        allPlaylists.forEach { playlist ->
+                            Text(
+                                text = playlist.name,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        viewModel.addTrackToPlaylist(playlist.id, track)
+                                        addToPlaylistTrack = null
+                                    }
+                                    .padding(vertical = 12.dp)
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { addToPlaylistTrack = null }) { Text("Close") }
+            }
+        )
+    }
+}
+
+@Composable
+fun EmptyState(title: String, subtitle: String) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .weight(1f),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Icon(
+                imageVector = Icons.Default.Block,
+                contentDescription = "Empty state icon",
+                tint = Color.DarkGray,
+                modifier = Modifier.size(56.dp)
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+            Text(text = title, fontWeight = FontWeight.Bold, color = Color.White, fontSize = 15.sp)
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(text = subtitle, color = Color.Gray, fontSize = 12.sp)
+        }
+    }
+}
+
+@Composable
+fun PlaylistRow(
+    playlist: PlaylistWithCount,
+    onClick: () -> Unit,
+    onRename: () -> Unit,
+    onDelete: () -> Unit
+) {
+    Card(
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = Color(0x0CFFFFFF)),
+        border = BorderStroke(1.dp, Color(0x12FFFFFF)),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick() }
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(14.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = Icons.Default.PlaylistPlay,
+                contentDescription = null,
+                tint = SpotifyGreen,
+                modifier = Modifier.size(32.dp)
+            )
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(horizontal = 12.dp)
+            ) {
+                Text(playlist.name, fontWeight = FontWeight.Bold, fontSize = 15.sp, color = Color.White)
+                Text("${playlist.trackCount} songs", fontSize = 12.sp, color = Color.Gray)
+            }
+            IconButton(onClick = onRename) {
+                Icon(Icons.Default.Edit, contentDescription = "Rename", tint = Color.LightGray, modifier = Modifier.size(18.dp))
+            }
+            IconButton(onClick = onDelete) {
+                Icon(Icons.Default.Delete, contentDescription = "Delete", tint = Color(0xFFE57373), modifier = Modifier.size(18.dp))
+            }
+        }
+    }
+}
+
+@Composable
+fun TrackListItemWithPlaylistAction(
+    track: Track,
+    isCurrent: Boolean,
+    isPlaying: Boolean,
+    onClick: () -> Unit,
+    onFavoriteToggle: () -> Unit,
+    onDownload: () -> Unit,
+    onAddToPlaylist: () -> Unit
+) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Box(modifier = Modifier.weight(1f)) {
+            TrackListItem(
+                track = track,
+                isCurrent = isCurrent,
+                isPlaying = isPlaying,
+                onClick = onClick,
+                onFavoriteToggle = onFavoriteToggle,
+                onDownload = onDownload
+            )
+        }
+        IconButton(onClick = onAddToPlaylist) {
+            Icon(Icons.Default.Add, contentDescription = "Add to playlist", tint = Color.LightGray, modifier = Modifier.size(20.dp))
         }
     }
 }
