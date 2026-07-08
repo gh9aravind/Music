@@ -483,6 +483,54 @@ class MusicViewModel(
         }
     }
 
+    // --- Playlists ---
+    val allPlaylists: StateFlow<List<PlaylistWithCount>> = repository.allPlaylists
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    private val _selectedPlaylistId = MutableStateFlow<Long?>(null)
+    val selectedPlaylistId: StateFlow<Long?> = _selectedPlaylistId.asStateFlow()
+
+    val selectedPlaylistTracks: StateFlow<List<Track>> = _selectedPlaylistId
+        .flatMapLatest { id -> if (id == null) flowOf(emptyList()) else repository.getPlaylistTracks(id) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    fun openPlaylist(playlistId: Long) {
+        _selectedPlaylistId.value = playlistId
+    }
+
+    fun closePlaylist() {
+        _selectedPlaylistId.value = null
+    }
+
+    fun createPlaylist(name: String) {
+        val trimmed = name.trim()
+        if (trimmed.isEmpty()) return
+        viewModelScope.launch { repository.createPlaylist(trimmed) }
+    }
+
+    fun renamePlaylist(playlistId: Long, newName: String) {
+        val trimmed = newName.trim()
+        if (trimmed.isEmpty()) return
+        viewModelScope.launch { repository.renamePlaylist(playlistId, trimmed) }
+    }
+
+    fun deletePlaylist(playlistId: Long) {
+        viewModelScope.launch {
+            repository.deletePlaylist(playlistId)
+            if (_selectedPlaylistId.value == playlistId) {
+                _selectedPlaylistId.value = null
+            }
+        }
+    }
+
+    fun addTrackToPlaylist(playlistId: Long, track: Track) {
+        viewModelScope.launch { repository.addTrackToPlaylist(playlistId, track) }
+    }
+
+    fun removeTrackFromPlaylist(playlistId: Long, trackId: String) {
+        viewModelScope.launch { repository.removeTrackFromPlaylist(playlistId, trackId) }
+    }
+
     override fun onCleared() {
         super.onCleared()
         stopProgressTracking()
