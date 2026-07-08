@@ -311,13 +311,11 @@ fun LibraryScreen(
         )
     }
 }
-
 @Composable
-fun EmptyState(title: String, subtitle: String) {
+fun EmptyState(title: String, subtitle: String, modifier: Modifier = Modifier) {
     Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .weight(1f),
+        modifier = modifier
+            .fillMaxWidth(),
         contentAlignment = Alignment.Center
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
