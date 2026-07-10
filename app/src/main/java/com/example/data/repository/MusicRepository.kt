@@ -130,7 +130,6 @@ class MusicRepository(
     suspend fun removeTrackFromPlaylist(playlistId: Long, trackId: String) = withContext(Dispatchers.IO) {
         musicDao.removeTrackFromPlaylist(playlistId, trackId)
     }
-}
 
     /**
      * Returns a fresh, directly-playable stream URL for [track].
