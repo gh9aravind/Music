@@ -71,6 +71,10 @@ class MusicViewModel(
     private val _playQueue = MutableStateFlow<List<Track>>(emptyList())
     val playQueue: StateFlow<List<Track>> = _playQueue.asStateFlow()
 
+    fun reorderQueue(newQueue: List<Track>) {
+        _playQueue.value = newQueue
+    }
+
     // --- Downloading Map Progress States ---
     private val _downloadProgressMap = MutableStateFlow<Map<String, Float>>(emptyMap())
     val downloadProgressMap: StateFlow<Map<String, Float>> = _downloadProgressMap.asStateFlow()
