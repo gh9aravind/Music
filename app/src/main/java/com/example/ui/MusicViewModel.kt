@@ -380,6 +380,7 @@ class MusicViewModel(
             // this MediaMetadata automatically - no extra receiver code needed.
             val mediaItem = MediaItem.Builder()
                 .setUri(dataSource)
+                .setMimeType(androidx.media3.common.MimeTypes.AUDIO_MP4)
                 .setMediaId(track.id)
                 .setMediaMetadata(
                     MediaMetadata.Builder()
