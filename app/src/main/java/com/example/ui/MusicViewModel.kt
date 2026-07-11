@@ -253,6 +253,11 @@ class MusicViewModel(
     private suspend fun playTrackContent(track: Track) {
         try {
             _isPlaying.value = false
+            // Reset position/duration immediately so the seekbar doesn't
+            // briefly show the previous track's leftover position/time
+            // while the new track's stream is being resolved.
+            _playbackPosition.value = 0
+            _trackDuration.value = 0
 
             // Resolve a fresh playable URL right before playing. For YouTube
             // tracks this performs a network extraction since the signed
