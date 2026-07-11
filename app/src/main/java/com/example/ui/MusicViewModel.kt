@@ -483,6 +483,35 @@ class MusicViewModel(
         _isRepeatEnabled.value = !_isRepeatEnabled.value
     }
 
+    private fun updateAudioQualityInfo(tracks: androidx.media3.common.Tracks) {
+        for (group in tracks.groups) {
+            if (group.type == androidx.media3.common.C.TRACK_TYPE_AUDIO && group.isSelected) {
+                for (i in 0 until group.length) {
+                    if (group.isTrackSelected(i)) {
+                        _audioQualityInfo.value = formatAudioQuality(group.getTrackFormat(i))
+                    }
+                }
+            }
+        }
+    }
+
+    private fun formatAudioQuality(format: androidx.media3.common.Format): String {
+        val codec = when {
+            format.sampleMimeType?.contains("mp4a") == true -> "AAC"
+            format.sampleMimeType?.contains("opus") == true -> "OPUS"
+            format.sampleMimeType?.contains("mpeg") == true -> "MP3"
+            format.sampleMimeType?.contains("flac") == true -> "FLAC"
+            else -> format.sampleMimeType?.substringAfterLast('/')?.uppercase() ?: "AUDIO"
+        }
+        val sampleRate = if (format.sampleRate != androidx.media3.common.Format.NO_VALUE) {
+            "${format.sampleRate / 1000}kHz"
+        } else null
+        val bitrate = if (format.bitrate != androidx.media3.common.Format.NO_VALUE && format.bitrate > 0) {
+            "${format.bitrate / 1000}kbps"
+        } else null
+        return listOfNotNull(codec, bitrate, sampleRate).joinToString(" · ")
+    }
+
     private fun onSongCompleted() {
         if (_isRepeatEnabled.value) {
             // Repeat active song
