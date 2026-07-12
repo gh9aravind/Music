@@ -362,6 +362,7 @@ class MusicViewModel(
     fun selectAndPlayTrack(track: Track, queue: List<Track>) {
         _playQueue.value = queue
         _currentTrack.value = track
+        _currentQueueIndex.value = queue.indexOfFirst { it.id == track.id }.coerceAtLeast(0)
 
         viewModelScope.launch {
             repository.updateLastPlayed(track.id)
