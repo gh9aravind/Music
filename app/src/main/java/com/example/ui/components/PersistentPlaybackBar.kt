@@ -226,7 +226,12 @@ fun PersistentPlaybackBar(
                 Slider(
                     value = if (duration > 0) position.toFloat() else 0f,
                     onValueChange = { newValue ->
-                        viewModel.seekTo(newValue.toInt())
+                        // Never let a stray tap seek into the last 1.5s of a
+                        // track - that was causing accidental taps near the
+                        // end of this bar to immediately trigger "song ended"
+                        // and skip to the next track.
+                        val safeMax = (duration - 1500).coerceAtLeast(0)
+                        viewModel.seekTo(newValue.toInt().coerceAtMost(safeMax))
                     },
                     valueRange = 0f..(if (duration > 0) duration.toFloat() else 100f),
                     colors = SliderDefaults.colors(
