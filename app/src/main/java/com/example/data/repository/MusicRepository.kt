@@ -132,6 +132,30 @@ class MusicRepository(
         musicDao.removeTrackFromPlaylist(playlistId, trackId)
     }
 
+    suspend fun searchYouTubeAlbums(query: String): List<AlbumResult> = withContext(Dispatchers.IO) {
+        try {
+            com.example.data.youtube.YouTubeMusicService.searchAlbums(query)
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
+    suspend fun searchYouTubePlaylists(query: String): List<AlbumResult> = withContext(Dispatchers.IO) {
+        try {
+            com.example.data.youtube.YouTubeMusicService.searchPlaylists(query)
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
+    suspend fun getAlbumTracks(playlistUrl: String): List<Track> = withContext(Dispatchers.IO) {
+        try {
+            com.example.data.youtube.YouTubeMusicService.getPlaylistTracks(playlistUrl)
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
     /**
      * Returns a fresh, directly-playable stream URL for [track].
      * - If the track was downloaded, returns the local file path.
